@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Trackport · MP3 export</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+  <script src="audio.js" defer></script>
+  <script src="transfer.js" defer></script>
+  <script src="catalog.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+
+<body>
+  <header class="top">
+    <div class="bar">
+      <div class="brand"><span class="mark"
+          aria-hidden="true"><i></i><i></i><i></i><i></i></span>Trackport</div>
+      <div class="top-actions"><span class="local"><i></i>Local workspace</span><button id="help"
+          class="top-btn">Help</button></div>
+    </div>
+  </header>
+  <main>
+    <div class="intro">
+      <h1>MP3 export<span>.</span></h1>
+      <p>Turn full audio files and download links into music you can take anywhere.</p>
+    </div>
+    <div class="grid">
+      <section class="panel intake" aria-labelledby="intake-title">
+        <div class="box-head">
+          <h2 id="intake-title">Add audio</h2>
+        </div>
+        <div class="tabs" role="tablist" aria-label="Audio source">
+          <button id="files-tab" role="tab" aria-selected="true" aria-controls="files-pane"
+            data-tab="files">Files</button>
+          <button id="url-tab" role="tab" aria-selected="false" tabindex="-1" aria-controls="url-pane"
+            data-tab="url">Download URL</button>
+          <button id="ref-tab" role="tab" aria-selected="false" tabindex="-1" aria-controls="ref-pane"
+            data-tab="ref">Track link</button>
+        </div>
+        <div id="files-pane" class="pane" role="tabpanel" aria-labelledby="files-tab">
+          <div id="drop" class="drop"><span class="file-glyph" aria-hidden="true">♫</span><strong>Drop
+              audio files here</strong><span>MP3, WAV, FLAC, M4A, AAC, Ogg and more</span><button
+              id="choose" class="primary" type="button">Choose files</button></div>
+        </div>
+        <div id="url-pane" class="pane" role="tabpanel" aria-labelledby="url-tab" hidden>
+          <form id="url-form"><label for="direct-url">Full audio download URL</label><input
+              id="direct-url" type="text" inputmode="url"
+              placeholder="https://artist.example/recording.flac" autocomplete="off">
+            <p class="hint">Use a direct HTTPS link from the artist, store or file host.</p><button
+              class="primary">Add to queue</button>
+          </form>
+        </div>
+        <div id="ref-pane" class="pane" role="tabpanel" aria-labelledby="ref-tab" hidden>
+          <form id="ref-form"><label for="ref-url">Apple Music or Spotify track link</label><input
+              id="ref-url" type="text" placeholder="Paste a shared song link" autocomplete="off">
+            <p class="hint">Look up the track, then attach its full audio file or download URL.</p>
+            <button id="lookup" class="primary">Look up track</button>
+          </form>
+          <div id="reference" class="reference" hidden>
+            <div class="ref-top">
+              <div><span class="small-label" id="ref-provider"></span><strong
+                  id="ref-title"></strong><span id="ref-artist"></span></div><button id="clear-ref"
+                class="text-btn">Clear</button>
+            </div><a id="ref-open" target="_blank" rel="noreferrer">Open track ↗</a>
+            <a id="apple-purchase-help" class="purchase-link" target="_blank" rel="noreferrer" href="https://support.apple.com/en-us/120553" hidden>Download an iTunes purchase ↗</a>
+            <p id="ref-note" class="hint"></p><button id="attach-file" class="secondary">Attach audio
+              file</button> <button id="attach-url" class="text-btn">Use a download URL</button>
+            <form id="attach-form" hidden><label for="paired-url">Full audio URL for this
+                track</label><input id="paired-url" type="text" inputmode="url" placeholder="https://…"
+                autocomplete="off"><button class="secondary">Add paired track</button></form>
+          </div>
+        </div>
+        <input id="picker" type="file"
+          accept="audio/*,.mp3,.wav,.flac,.m4a,.aac,.ogg,.opus,.aif,.aiff,.m4p" multiple hidden>
+        <p id="intake-msg" role="status" class="feedback" hidden></p>
+      </section>
+      <aside class="settings" aria-labelledby="settings-title">
+        <div class="settings-head"><span class="wheel" aria-hidden="true">◉</span>
+          <h2 id="settings-title">Output settings</h2>
+        </div>
+        <label for="quality">MP3 bitrate</label><select id="quality">
+          <option value="320" selected>320 kbps</option>
+          <option value="256">256 kbps</option>
+          <option value="192">192 kbps</option>
+          <option value="128">128 kbps</option>
+        </select>
+        <dl>
+          <div>
+            <dt>Sample rate</dt>
+            <dd>44.1 kHz</dd>
+          </div>
+          <div>
+            <dt>Existing MP3s</dt>
+            <dd>Copy original</dd>
+          </div>
+        </dl>
+        <p>New encodes use the selected bitrate. MP3 copies keep their original sound and tags.</p>
+      </aside>
+    </div>
+    <section class="panel queue" aria-labelledby="queue-title">
+      <div class="queue-head">
+        <div class="queue-heading">
+          <h2 id="queue-title">Transfer queue</h2><span class="number" id="count">0</span>
+        </div>
+        <div class="queue-tools"><button id="bundle" class="secondary" disabled>Save ZIP</button><button
+            id="run" class="primary" disabled>Render queue</button><button id="stop" class="secondary"
+            hidden>Stop</button></div>
+      </div>
+      <div id="empty" class="empty">
+        <div class="empty-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><strong>Your
+          queue is empty</strong>
+        <p>Add a file or link to start an export.</p>
+      </div>
+      <ol id="jobs"></ol>
+      <div id="queue-msg" role="status" class="queue-msg" hidden></div>
+    </section>
+    <footer><span>Trackport · MP3 file renderer</span><button class="text-btn" id="quit">End
+        session</button></footer>
+  </main>
+  <dialog id="guide">
+    <div class="dialog-head">
+      <h2>Using Trackport</h2><button id="close-help" class="secondary">Close</button>
+    </div>
+    <h3>Export a full recording</h3>
+    <p>Add local files or paste a direct HTTPS audio download. Select a bitrate, render the queue, then
+      save an MP3 or a ZIP. The ZIP contains ordinary MP3 files you can extract and copy to another
+      device.</p>
+    <h3>Use a music-service link</h3>
+    <p>Paste a shared song link or Spotify track URI. Apple Music and Spotify supply track details.
+      Attach your copy of the recording, such as a downloaded iTunes Store purchase or an artist-provided
+      file. Subscription offline downloads play inside their respective apps.</p>
+    <h3>Formats and storage</h3>
+    <p>New encodes use mono or stereo at 44.1 kHz. Existing MP3s copy exactly. Format decoding depends on
+      your browser. Full audio stays on this computer. Download URLs go to their hosts, and catalog
+      lookups contact the selected service. The import limit is 256 MiB per file. Very long decodes need
+      additional memory.</p>
+    <p>Closing this tab discards the queue. Save your exports first, then choose End session or close the
+      Trackport console.</p>
+  </dialog>
+</body>
+
+</html>
