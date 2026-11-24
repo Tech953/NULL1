@@ -89,6 +89,21 @@ static int disconnected(Conn c) {
 #endif
     return ready>0 && recv(c,&b,1,MSG_PEEK)==0;
 }
+/* Proxy strings reach a curl command line on Windows, so they must not
+   contain characters that could break out of a quoted argument. The POSIX
+   path passes argv directly and is immune, but the same check keeps both
+   paths honest. The username also cannot contain ':', which separates it
+   from the password in --proxy-user. */
+static int proxy_ok(const struct Proxy *p) {
+    if (!p || !p->url || !*p->url) return 1;
+    for (const char *s = p->url; *s; s++)
+        if ((unsigned char)*s < 33 || (unsigned char)*s >= 127 || *s == '"' || *s == '\\') return 0;
+    for (const char *s = p->user; s && *s; s++)
+        if ((unsigned char)*s < 33 || (unsigned char)*s >= 127 || *s == '"' || *s == '\\' || *s == ':') return 0;
+    for (const char *s = p->pass; s && *s; s++)
+        if ((unsigned char)*s < 33 || (unsigned char)*s >= 127 || *s == '"' || *s == '\\') return 0;
+    return 1;
+}
 #ifdef _WIN32
 static FILE *stage(void) {
     wchar_t dir[MAX_PATH+1],path[MAX_PATH+1];DWORD n=GetTempPathW(MAX_PATH,dir);
@@ -105,12 +120,29 @@ static int stage_too_big(FILE *f,int limit) {
     DWORD low=GetFileSize(h,&high);
     return high!=0 || low==INVALID_FILE_SIZE || low>(DWORD)limit+3;
 }
-static int begin_curl(FILE *f,const char *url,int limit,int catalog,Child *child) {
+static int begin_curl(FILE *f,const char *url,int limit,int catalog,const struct Proxy *proxy,Child *child) {
     wchar_t exe[MAX_PATH+12],cmd[17000];char args[13400];int n;
     UINT dir=GetSystemDirectoryW(exe,MAX_PATH);
     if (!dir||dir>=MAX_PATH) return 0;wcscat(exe,L"\\curl.exe");
     n=format_text(args,sizeof(args),"curl.exe --disable --silent --fail --location --globoff --max-redirs 6 --connect-timeout 12 --max-time %d --proto =https --proto-redir =https --max-filesize %d --write-out %%{http_code} --url \"%s\"",catalog?18:300,limit,url);
     if (n<=0||n>=(int)sizeof(args)||!MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,args,-1,cmd,17000))return 0;
+    /* Proxy options are appended after the URL; curl accepts options in any
+       position. --proxy-anyauth lets a proxy that needs Digest/NTLM
+       negotiate instead of failing on Basic. */
+    if (proxy && proxy->url && *proxy->url) {
+        int m;
+        if (!proxy_ok(proxy)) return 0;
+        m=format_text(args+n,sizeof(args)-(size_t)n," --proxy \"%s\"",proxy->url);
+        if (m<=0||n+m>=(int)sizeof(args)) return 0;
+        n+=m;
+        if (proxy->user && *proxy->user) {
+            m=format_text(args+n,sizeof(args)-(size_t)n," --proxy-anyauth --proxy-user \"%s:%s\"",
+                          proxy->user,proxy->pass?proxy->pass:"");
+            if (m<=0||n+m>=(int)sizeof(args)) return 0;
+            n+=m;
+        }
+        if (!MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,args,-1,cmd,17000)) return 0;
+    }
     HANDLE self=GetCurrentProcess(),output=INVALID_HANDLE_VALUE;
     if (!DuplicateHandle(self,(HANDLE)_get_osfhandle(_fileno(f)),self,&output,0,TRUE,DUPLICATE_SAME_ACCESS))return 0;
     SECURITY_ATTRIBUTES sa={sizeof(sa),NULL,TRUE};
@@ -132,11 +164,24 @@ static void release_child(Child child){CloseHandle(child);}
 #else
 static FILE *stage(void) { FILE *f=tmpfile();if(f)fcntl(fileno(f),F_SETFD,FD_CLOEXEC);return f; }
 static int stage_too_big(FILE *f,int limit){struct stat st;return fstat(fileno(f),&st)||st.st_size>(off_t)limit+3;}
-static int begin_curl(FILE *f,const char *url,int limit,int catalog,Child *child) {
+static int begin_curl(FILE *f,const char *url,int limit,int catalog,const struct Proxy *proxy,Child *child) {
     char size[32];snprintf(size,sizeof(size),"%d",limit);
-    char *const args[]={"curl","--disable","--silent","--fail","--location","--globoff","--max-redirs","6",
-        "--connect-timeout","12","--max-time",catalog?"18":"300","--proto","=https","--proto-redir","=https",
-        "--max-filesize",size,"--write-out","%{http_code}","--url",(char *)url,NULL};
+    char userpass[512];
+    char *args[32];int i=0;
+    args[i++]="curl";args[i++]="--disable";args[i++]="--silent";args[i++]="--fail";
+    args[i++]="--location";args[i++]="--globoff";args[i++]="--max-redirs";args[i++]="6";
+    args[i++]="--connect-timeout";args[i++]="12";args[i++]="--max-time";args[i++]=catalog?"18":"300";
+    args[i++]="--proto";args[i++]="=https";args[i++]="--proto-redir";args[i++]="=https";
+    args[i++]="--max-filesize";args[i++]=size;args[i++]="--write-out";args[i++]="%{http_code}";
+    if (proxy && proxy->url && *proxy->url) {
+        if (!proxy_ok(proxy)) return 0;
+        args[i++]="--proxy";args[i++]=(char *)proxy->url;
+        if (proxy->user && *proxy->user) {
+            if (snprintf(userpass,sizeof(userpass),"%s:%s",proxy->user,proxy->pass?proxy->pass:"")>=(int)sizeof(userpass)) return 0;
+            args[i++]="--proxy-anyauth";args[i++]="--proxy-user";args[i++]=userpass;
+        }
+    }
+    args[i++]="--url";args[i++]=(char *)url;args[i++]=NULL;
     posix_spawn_file_actions_t a;if(posix_spawn_file_actions_init(&a))return 0;
     int bad=posix_spawn_file_actions_adddup2(&a,fileno(f),STDOUT_FILENO)||
             posix_spawn_file_actions_addopen(&a,STDIN_FILENO,"/dev/null",O_RDONLY,0)||
@@ -153,9 +198,9 @@ static void abort_child(Child child){int status;kill(child,SIGKILL);while(waitpi
 static void release_child(Child child){(void)child;}
 #endif
 
-int fetch_file(Conn client,const char *url,int limit,int catalog,FILE **out,int *length,int *http) {
+int fetch_file(Conn client,const char *url,int limit,int catalog,const struct Proxy *proxy,FILE **out,int *length,int *http) {
     FILE *f=stage(); if(!f)return 5;
-    Child child; if(!begin_curl(f,url,limit,catalog,&child)){fclose(f);return 4;}
+    Child child; if(!begin_curl(f,url,limit,catalog,proxy,&child)){fclose(f);return 4;}
     int code=1,reason=0;
     while(!poll_child(child,&code)){
         if (stage_too_big(f,limit))reason=2;

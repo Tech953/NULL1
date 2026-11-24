@@ -28,6 +28,10 @@ Imports are limited to 256 MiB per file. Audio is decoded in memory and one trac
 
 The server binds to an available loopback port on this computer. The app contacts a catalog only for a lookup. A direct URL is sent to its origin and redirect destinations. Downloads are staged in a temporary file which closes after the transfer. Private subscription caches, account pages and streaming playlists are unsuitable inputs.
 
+## Proxy
+
+Settings has a Proxy section (under Output settings): an Enable toggle (off by default), a Proxy URL field (`http://`, `https://`, `socks5://`, or `socks5h://`, with optional Username and Password), and a Test proxy button that fetches a small test URL through the proxy and reports success and latency. When the proxy is on, all network traffic — catalog lookups, audio downloads, and the proxy test — goes through it. When it is off, the app behaves exactly as before. Bad proxy settings fail closed (the request is refused instead of fetching directly). The proxy settings are saved in the browser's local storage. Note: the `Trackport-Windows-x64.zip` in this repo still holds the pre-proxy executable; the proxy code is in `source/` and takes effect in the next Windows build.
+
 ## Contents
 
 | Path | Purpose |

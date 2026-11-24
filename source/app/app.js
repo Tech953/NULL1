@@ -407,5 +407,59 @@
       e.returnValue = "";
     }
   });
+
+  /* Proxy settings: saved on every change, applied to all downloads. */
+  const proxyEls = {
+    enabled: el("proxy-enabled"),
+    url: el("proxy-url"),
+    user: el("proxy-user"),
+    pass: el("proxy-pass"),
+    test: el("proxy-test")
+  };
+  function showProxy() {
+    const p = Proxy.current;
+    proxyEls.enabled.checked = p.enabled;
+    proxyEls.url.value = p.url;
+    proxyEls.user.value = p.username;
+    proxyEls.pass.value = p.password;
+  }
+  function saveProxy() {
+    const p = {
+      enabled: proxyEls.enabled.checked,
+      url: proxyEls.url.value.trim(),
+      username: proxyEls.user.value,
+      password: proxyEls.pass.value
+    };
+    if (p.enabled && !Proxy.validUrl(p.url)) {
+      msg("proxy-msg", "Enter a valid proxy URL (http://, https:// or socks5://).");
+      return null;
+    }
+    if (!Proxy.validCredentials(p.username, p.password)) {
+      msg("proxy-msg",
+        "Proxy username and password cannot contain spaces, quotes or control characters.");
+      return null;
+    }
+    Proxy.save(p);
+    msg("proxy-msg", "");
+    return p;
+  }
+  for (const key of ["enabled", "url", "user", "pass"]) {
+    proxyEls[key].addEventListener("change", saveProxy);
+  }
+  proxyEls.test.onclick = async () => {
+    if (!saveProxy()) return;
+    proxyEls.test.disabled = true;
+    msg("proxy-msg", "Testing proxy…");
+    try {
+      const r = await Proxy.test();
+      msg("proxy-msg", "Proxy works · " + r.ms + " ms" + (r.detail ? " · " + r.detail : ""));
+    } catch (e) {
+      msg("proxy-msg", "Proxy test failed: " + (e.message ||
+        "Could not reach the test address through the proxy."));
+    } finally {
+      proxyEls.test.disabled = false;
+    }
+  };
+  showProxy();
   refresh();
 })();

@@ -29,8 +29,14 @@ void secure_socket(Conn c);
 void socket_deadlines(Conn c);
 int start_worker(Conn c, void (*handler)(Conn));
 void open_browser(const char *url);
+/* Proxy settings for an outbound fetch. url is a bare scheme + authority
+   (http://, https://, socks5:// or socks5h://); user/pass are optional.
+   The settings are applied to curl's proxy options (CURLOPT_PROXY and
+   CURLOPT_PROXYUSERPWD), so a SOCKS5 proxy is honoured by the same code
+   path as an HTTP proxy. An empty url means "no proxy". */
+struct Proxy { const char *url, *user, *pass; };
 /* A completed HTTP response is staged in a temporary file. The final three
    bytes are curl's HTTP status trailer and are excluded from served audio. */
 int fetch_file(Conn client, const char *url, int limit, int catalog,
-               FILE **out, int *length, int *http);
+               const struct Proxy *proxy, FILE **out, int *length, int *http);
 #endif

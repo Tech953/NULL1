@@ -397,6 +397,61 @@ main {
   color: #cfdecb
 }
 
+.proxy {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid #4a5e50
+}
+
+.proxy h3 {
+  font-size: .95rem;
+  margin: 0 0 10px
+}
+
+.proxy-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 650;
+  font-size: .82rem;
+  margin-bottom: 10px
+}
+
+.proxy-toggle input {
+  accent-color: #c7e89e
+}
+
+.proxy input[type=text],
+.proxy input[type=password] {
+  display: block;
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid #bbc5b7;
+  border-radius: 5px;
+  background: #fffefa;
+  color: var(--ink);
+  margin-bottom: 10px
+}
+
+.proxy .optional {
+  font-weight: 400;
+  color: #cfdecb
+}
+
+.proxy .secondary {
+  margin: 2px 0 4px
+}
+
+.proxy .feedback {
+  color: #f9fcf1;
+  font-size: .83rem
+}
+
+.proxy .hint {
+  color: #cfdecb;
+  font-size: .8rem
+}
+
 .pane form {
   padding: 3px 0
 }

@@ -80,8 +80,51 @@ static int valid_url(const char *url,int catalog){
     for(size_t i=0;i<sizeof(pages)/sizeof(pages[0]);i++)if(n==strlen(pages[i])&&!text_cmp(host,pages[i],n))return 0;
     return 1;
 }
-static void file_response(Conn c,const char *url,int catalog){
-    FILE *file=NULL;int n=0,http=0,reason=fetch_file(c,url,catalog?JSON_LIMIT:AUDIO_LIMIT,catalog,&file,&n,&http);
+/* Proxy settings arrive as X-Proxy-* headers on every local request. A bare
+   scheme + authority only: no userinfo, path, query or fragment, since
+   credentials travel in their own fields. */
+static int proxy_url_ok(const char *u) {
+    const char *schemes[]={"http://","https://","socks5://","socks5h://"};
+    const char *rest=NULL;
+    for(size_t i=0;i<sizeof(schemes)/sizeof(schemes[0]);i++){
+        size_t n=strlen(schemes[i]);
+        if(!strncmp(u,schemes[i],n)){rest=u+n;break;}
+    }
+    if(!rest||!*rest)return 0;
+    for(const char *p=u;*p;p++){
+        unsigned char c=(unsigned char)*p;
+        if(c<33||c>=127||c=='"'||c=='\\')return 0;
+    }
+    for(const char *p=rest;*p;p++)if(*p=='@'||*p=='/'||*p=='?'||*p=='#')return 0;
+    return 1;
+}
+static int proxy_cred_ok(const char *s) {
+    for(const char *p=s;*p;p++){
+        unsigned char c=(unsigned char)*p;
+        if(c<33||c>=127||c=='"'||c=='\\')return 0;
+    }
+    return 1;
+}
+/* Reads the proxy headers into caller-owned buffers. Returns 1 on success
+   (proxy.url is NULL when the proxy is not enabled) and 0 when the headers
+   are malformed; callers reject the request in that case so a broken proxy
+   setting fails closed instead of fetching directly. */
+static int parse_proxy(const char *lines,struct Proxy *proxy,char *url,size_t urlCap,char *user,size_t userCap,char *pass,size_t passCap) {
+    char enabled[8];
+    int has=header_value(lines,"X-Proxy-Enabled",enabled,sizeof(enabled));
+    proxy->url=NULL;proxy->user=NULL;proxy->pass=NULL;
+    if(has<0)return 0;
+    if(has==0)return 1;
+    if(strcmp(enabled,"1"))return 0;
+    if(header_value(lines,"X-Proxy-Url",url,urlCap)!=1||!proxy_url_ok(url))return 0;
+    if(header_value(lines,"X-Proxy-User",user,userCap)<0||
+       header_value(lines,"X-Proxy-Pass",pass,passCap)<0)return 0;
+    if(!proxy_cred_ok(user)||!proxy_cred_ok(pass)||strchr(user,':'))return 0;
+    proxy->url=url;proxy->user=user;proxy->pass=pass;
+    return 1;
+}
+static void file_response(Conn c,const char *url,int catalog,const struct Proxy *proxy){
+    FILE *file=NULL;int n=0,http=0,reason=fetch_file(c,url,catalog?JSON_LIMIT:AUDIO_LIMIT,catalog,proxy,&file,&n,&http);
     if(reason){
         if(reason==3)return;
         if(reason==2)message(c,413,"Too Large",catalog?"The catalog reply is too large.":"This file exceeds the 256 MiB import limit.");
@@ -99,6 +142,21 @@ static void file_response(Conn c,const char *url,int catalog){
             int got=(int)fread(buffer,1,count,file);if(!got||!send_all(c,buffer,got))break;remaining-=got;}
     }
     fclose(file);
+}
+/* Fetches a small test URL through the configured proxy and reports only
+   success or failure; the fetched body is discarded. */
+static void proxy_test_response(Conn c,const char *url,const struct Proxy *proxy){
+    FILE *file=NULL;int n=0,http=0,reason=fetch_file(c,url,JSON_LIMIT,1,proxy,&file,&n,&http);
+    if(reason){
+        if(reason==2)message(c,413,"Too Large","The test reply is too large.");
+        else if(reason==4)message(c,503,"Transfer Unavailable","The system HTTPS downloader could not start. On Windows, check that System32 contains curl.exe.");
+        else if(reason==5)message(c,507,"Temp File Error","A temporary file could not be created or read. Check free disk space and retry.");
+        else if(http==401||http==403)message(c,502,"Access Denied","The proxy or the test address denied the request.");
+        else message(c,502,"Proxy Test Failed","The test address could not be reached through the proxy. Check the proxy URL and credentials.");
+        return;
+    }
+    fclose(file);
+    message(c,200,"OK","Proxy OK");
 }
 static void serve(Conn c){
     char data[REQUEST_CAP+1],method[12],path[500],ver[12],host[80],actual_origin[100],action[8],length[32],te[64];
@@ -138,9 +196,19 @@ static void serve(Conn c){
     if(memchr(url,0,expects)){message(c,400,"Bad Request","Invalid URL.");return;}
     if(!strcmp(path,"/api/quit")){message(c,200,"OK","Session ended.");ADD(&stopping,1);return;}
     const int catalog=!strcmp(path,"/api/catalog");
-    if(!catalog&&strcmp(path,"/api/audio")){message(c,404,"Not Found","Unknown action.");return;}
+    const int test=!strcmp(path,"/api/proxy-test");
+    if(!catalog&&!test&&strcmp(path,"/api/audio")){message(c,404,"Not Found","Unknown action.");return;}
+    struct Proxy proxy;char proxyUrl[512],proxyUser[128],proxyPass[128];
+    if(!parse_proxy(lines,&proxy,proxyUrl,sizeof(proxyUrl),proxyUser,sizeof(proxyUser),proxyPass,sizeof(proxyPass))){
+        message(c,400,"Bad Request","Invalid proxy setting.");return;}
+    if(test){
+        if(!proxy.url){message(c,400,"Bad Request","Enable the proxy first.");return;}
+        if(!valid_url(url,0)){message(c,400,"Bad Request","Enter a valid HTTPS test URL.");return;}
+        proxy_test_response(c,url,&proxy);
+        return;
+    }
     if(!valid_url(url,catalog)){message(c,400,"Bad Request","Enter a valid direct HTTPS download URL, or use the Track link tab.");return;}
-    file_response(c,url,catalog);
+    file_response(c,url,catalog,&proxy);
 }
 static void handle(Conn c){serve(c);ADD(&workers,-1);}
 int main(int argc,char **argv){

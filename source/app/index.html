@@ -9,6 +9,7 @@
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="style.css">
   <script src="audio.js" defer></script>
+  <script src="proxy.js" defer></script>
   <script src="transfer.js" defer></script>
   <script src="catalog.js" defer></script>
   <script src="app.js" defer></script>
@@ -99,6 +100,21 @@
           </div>
         </dl>
         <p>New encodes use the selected bitrate. MP3 copies keep their original sound and tags.</p>
+        <section class="proxy" aria-labelledby="proxy-title">
+          <h3 id="proxy-title">Proxy</h3>
+          <label class="proxy-toggle"><input id="proxy-enabled" type="checkbox"> Enable proxy</label>
+          <label for="proxy-url">Proxy URL</label><input id="proxy-url" type="text"
+            inputmode="url" placeholder="http://127.0.0.1:8080 or socks5://127.0.0.1:1080"
+            autocomplete="off">
+          <label for="proxy-user">Username <span class="optional">(optional)</span></label><input
+            id="proxy-user" type="text" autocomplete="off">
+          <label for="proxy-pass">Password <span class="optional">(optional)</span></label><input
+            id="proxy-pass" type="password" autocomplete="off">
+          <button id="proxy-test" class="secondary" type="button">Test proxy</button>
+          <p id="proxy-msg" role="status" class="feedback" hidden></p>
+          <p class="hint">When enabled, catalog lookups and downloads go through this proxy.
+            When off, Trackport connects directly.</p>
+        </section>
       </aside>
     </div>
     <section class="panel queue" aria-labelledby="queue-title">
@@ -138,6 +154,11 @@
       your browser. Full audio stays on this computer. Download URLs go to their hosts, and catalog
       lookups contact the selected service. The import limit is 256 MiB per file. Very long decodes need
       additional memory.</p>
+    <h3>Proxy</h3>
+    <p>Output settings has a Proxy section. Enter a proxy URL (http://, https:// or socks5://), an
+      optional username and password, then enable it. When enabled, catalog lookups and downloads go
+      through the proxy; Test proxy checks the connection and reports how long the test took. When off,
+      Trackport connects directly. Proxy details are stored only in this browser.</p>
     <p>Closing this tab discards the queue. Save your exports first, then choose End session or close the
       Trackport console.</p>
   </dialog>

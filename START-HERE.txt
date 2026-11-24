@@ -61,6 +61,17 @@ destinations. Downloads are staged in a temporary file which closes after the
 transfer. Private subscription caches, account pages and streaming playlists
 are unsuitable inputs.
 
+Proxy
+
+Settings has a Proxy section (under Output settings): an Enable toggle (off by
+default), a Proxy URL field (http://, https://, socks5://, or socks5h://, with
+optional username and password), and a Test proxy button that fetches a small
+test URL through the proxy and reports success and latency. When the proxy is
+on, all network traffic — catalog lookups, audio downloads, and the proxy test
+— goes through it. When it is off, the app behaves exactly as before. Bad
+proxy settings fail closed (the request is refused instead of fetching
+directly). The proxy settings are saved in the browser's local storage.
+
 Contents
 
 Trackport.exe           Ready-to-run Windows x64 application

@@ -32,7 +32,12 @@ const Transfer = (() => {
       method: "POST",
       headers: {
         "Content-Type": "text/plain;charset=UTF-8",
-        "X-Trackport": "1"
+        "X-Trackport": "1",
+        /* Proxy settings for the local server: the server applies them to
+           every curl fetch it performs for this request, so all external
+           traffic (catalog lookups, audio downloads, proxy test) routes
+           through the configured proxy when it is enabled. */
+        ...Proxy.headers()
       },
       body: url,
       signal,
