@@ -91,11 +91,14 @@ static int proxy_url_ok(const char *u) {
         if(!strncmp(u,schemes[i],n)){rest=u+n;break;}
     }
     if(!rest||!*rest)return 0;
+    size_t length=strlen(rest);
+    if(length&&rest[length-1]=='/')length--;
+    if(!length)return 0;
     for(const char *p=u;*p;p++){
         unsigned char c=(unsigned char)*p;
         if(c<33||c>=127||c=='"'||c=='\\')return 0;
     }
-    for(const char *p=rest;*p;p++)if(*p=='@'||*p=='/'||*p=='?'||*p=='#')return 0;
+    for(size_t i=0;i<length;i++)if(rest[i]=='@'||rest[i]=='/'||rest[i]=='?'||rest[i]=='#')return 0;
     return 1;
 }
 static int proxy_cred_ok(const char *s) {

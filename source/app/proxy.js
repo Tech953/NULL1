@@ -73,7 +73,7 @@ const Proxy = (() => {
      backslashes or control characters. */
   function validCredentials(user, pass) {
     return !/[^\x21-\x7e]/.test(user || "") && !/[^\x21-\x7e]/.test(pass || "") &&
-      !/["\\]/.test(user || "") && !/["\\]/.test(pass || "");
+      !/["\\:]/.test(user || "") && !/["\\]/.test(pass || "");
   }
 
   /* Headers for the local server. Empty credentials are omitted. The server
@@ -81,8 +81,11 @@ const Proxy = (() => {
      so an enabled-but-broken setting fails closed instead of fetching
      directly. */
   function headers() {
-    if (!current.enabled || !validUrl(current.url)) return {};
-    const h = { "X-Proxy-Enabled": "1", "X-Proxy-Url": current.url };
+    if (!current.enabled) return {};
+    /* Always signal enabled state. If the saved URL is invalid, omitting
+       X-Proxy-Enabled would make the server fall back to a direct request. */
+    const h = { "X-Proxy-Enabled": "1" };
+    if (validUrl(current.url)) h["X-Proxy-Url"] = current.url;
     if (current.username) h["X-Proxy-User"] = current.username;
     if (current.password) h["X-Proxy-Pass"] = current.password;
     return h;

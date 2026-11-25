@@ -132,11 +132,11 @@ static int begin_curl(FILE *f,const char *url,int limit,int catalog,const struct
     if (proxy && proxy->url && *proxy->url) {
         int m;
         if (!proxy_ok(proxy)) return 0;
-        m=format_text(args+n,sizeof(args)-(size_t)n," --proxy \"%s\"",proxy->url);
+        m=format_text(args+n,sizeof(args)-(size_t)n," --noproxy \"\" --proxy \"%s\"",proxy->url);
         if (m<=0||n+m>=(int)sizeof(args)) return 0;
         n+=m;
         if (proxy->user && *proxy->user) {
-            m=format_text(args+n,sizeof(args)-(size_t)n," --proxy-anyauth --proxy-user \"%s:%s\"",
+        m=format_text(args+n,sizeof(args)-(size_t)n," --proxy-anyauth --proxy-user \"%s:%s\"",
                           proxy->user,proxy->pass?proxy->pass:"");
             if (m<=0||n+m>=(int)sizeof(args)) return 0;
             n+=m;
@@ -172,15 +172,17 @@ static int begin_curl(FILE *f,const char *url,int limit,int catalog,const struct
     args[i++]="--location";args[i++]="--globoff";args[i++]="--max-redirs";args[i++]="6";
     args[i++]="--connect-timeout";args[i++]="12";args[i++]="--max-time";args[i++]=catalog?"18":"300";
     args[i++]="--proto";args[i++]="=https";args[i++]="--proto-redir";args[i++]="=https";
-    args[i++]="--max-filesize";args[i++]=size;args[i++]="--write-out";args[i++]="%{http_code}";
+    args[i++]="--max-filesize";args[i++]=size;
     if (proxy && proxy->url && *proxy->url) {
         if (!proxy_ok(proxy)) return 0;
+        args[i++]="--noproxy";args[i++]="";
         args[i++]="--proxy";args[i++]=(char *)proxy->url;
         if (proxy->user && *proxy->user) {
             if (snprintf(userpass,sizeof(userpass),"%s:%s",proxy->user,proxy->pass?proxy->pass:"")>=(int)sizeof(userpass)) return 0;
             args[i++]="--proxy-anyauth";args[i++]="--proxy-user";args[i++]=userpass;
         }
     }
+    args[i++]="--write-out";args[i++]="%{http_code}";
     args[i++]="--url";args[i++]=(char *)url;args[i++]=NULL;
     posix_spawn_file_actions_t a;if(posix_spawn_file_actions_init(&a))return 0;
     int bad=posix_spawn_file_actions_adddup2(&a,fileno(f),STDOUT_FILENO)||

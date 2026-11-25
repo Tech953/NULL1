@@ -431,18 +431,25 @@
       password: proxyEls.pass.value
     };
     if (p.enabled && !Proxy.validUrl(p.url)) {
+      Proxy.save(p);
       msg("proxy-msg", "Enter a valid proxy URL (http://, https:// or socks5://).");
       return null;
     }
     if (!Proxy.validCredentials(p.username, p.password)) {
+      Proxy.save(p);
       msg("proxy-msg",
-        "Proxy username and password cannot contain spaces, quotes or control characters.");
+        "Check proxy credentials for spaces, quotes, backslashes, or a colon in the username.");
       return null;
     }
     Proxy.save(p);
     msg("proxy-msg", "");
     return p;
   }
+  proxyEls.form = el("proxy-form");
+  proxyEls.form.addEventListener("submit", e => {
+    e.preventDefault();
+    saveProxy();
+  });
   for (const key of ["enabled", "url", "user", "pass"]) {
     proxyEls[key].addEventListener("change", saveProxy);
   }
