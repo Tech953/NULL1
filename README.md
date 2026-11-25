@@ -30,7 +30,7 @@ The server binds to an available loopback port on this computer. The app contact
 
 ## Proxy
 
-Settings has a Proxy section (under Output settings): an Enable toggle (off by default), a Proxy URL field (`http://`, `https://`, `socks5://`, or `socks5h://`, with optional Username and Password), and a Test proxy button that fetches a small test URL through the proxy and reports success and latency. When the proxy is on, all network traffic — catalog lookups, audio downloads, and the proxy test — goes through it. When it is off, the app behaves exactly as before. Bad proxy settings fail closed (the request is refused instead of fetching directly). The proxy settings are saved in the browser's local storage. Note: the `Trackport-Windows-x64.zip` in this repo still holds the pre-proxy executable; the proxy code is in `source/` and takes effect in the next Windows build.
+Settings has a Proxy section (under Output settings): an Enable toggle (off by default), a Proxy URL field (`http://`, `https://`, `socks5://`, or `socks5h://`, with optional Username and Password), and a Test proxy button that fetches a small test URL through the proxy and reports success and latency. When the proxy is on, all network traffic — catalog lookups, audio downloads, and the proxy test — goes through it. When it is off, the app behaves exactly as before. Bad proxy settings fail closed (the request is refused instead of fetching directly). The proxy settings are saved in the browser's local storage.
 
 ## Contents
 
