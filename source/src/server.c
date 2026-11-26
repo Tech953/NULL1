@@ -20,10 +20,20 @@ static char authority[64],origin[84];
 #ifdef _WIN32
 static volatile LONG workers=0,stopping=0;
 #ifdef __TINYC__
-#undef InterlockedExchangeAdd
-WINBASEAPI LONG WINAPI InterlockedExchangeAdd(volatile LONG *,LONG);
-#endif
+/* TinyCC's Windows import library can bind InterlockedExchangeAdd as a
+   required kernel32 export on systems where that entry point is unavailable.
+   Use the x86/x64 atomic instruction directly so the EXE has no such import. */
+static LONG counter_add(volatile LONG *target,LONG value) {
+    __asm__ __volatile__("lock xaddl %0, %1"
+        : "+r"(value), "+m"(*target)
+        :
+        : "memory");
+    return value;
+}
+#define ADD(p,x) counter_add((p),(x))
+#else
 #define ADD(p,x) InterlockedExchangeAdd((p),(x))
+#endif
 #define VALUE(p) InterlockedCompareExchange((p),0,0)
 #else
 static _Atomic int workers=0,stopping=0;
