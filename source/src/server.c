@@ -171,6 +171,128 @@ static void proxy_test_response(Conn c,const char *url,const struct Proxy *proxy
     fclose(file);
     message(c,200,"OK","Proxy OK");
 }
+
+static int youtube_video_url(const char *url) {
+    static const char prefix[]="https://www.youtube.com/watch?v=";
+    if(strncmp(url,prefix,sizeof(prefix)-1)||strlen(url)!=(sizeof(prefix)-1)+11)return 0;
+    for(const char *p=url+sizeof(prefix)-1;*p;p++){
+        unsigned char ch=(unsigned char)*p;
+        if(!isalnum(ch)&&ch!='_'&&ch!='-')return 0;
+    }
+    return 1;
+}
+static const char *json_ws(const char *p){while(*p==' '||*p=='\t'||*p=='\r'||*p=='\n')p++;return p;}
+static const char *json_string_end(const char *p){
+    if(*p!='"')return NULL;
+    for(p++;*p;p++){
+        if(*p=='"')return p+1;
+        if(*p=='\\'){if(!p[1])return NULL;p++;}
+        else if((unsigned char)*p<32)return NULL;
+    }
+    return NULL;
+}
+static const char *json_value_end(const char *p){
+    p=json_ws(p);
+    if(*p=='"')return json_string_end(p);
+    if(*p=='{'||*p=='['){
+        char stack[128];int depth=0;
+        do{
+            if(*p=='{'||*p=='['){if(depth>=(int)sizeof(stack))return NULL;stack[depth++]=*p=='{'?'}':']';p++;}
+            else if(*p=='"' ){p=json_string_end(p);if(!p)return NULL;}
+            else if(*p=='}'||*p==']'){if(!depth||*p!=stack[depth-1])return NULL;depth--;p++;}
+            else p++;
+        }while(*p&&depth);
+        return depth?NULL:p;
+    }
+    while(*p&&*p!=','&&*p!='}'&&*p!=']'&&*p!=' '&&*p!='\t'&&*p!='\r'&&*p!='\n')p++;
+    return p;
+}
+static int json_field(const char *object,const char *name,const char **value,size_t *length){
+    const char *p=json_ws(object);if(*p++!='{')return 0;
+    for(;;){
+        p=json_ws(p);if(*p=='}')return 0;
+        const char *key=p,*key_end=json_string_end(key);if(!key_end)return 0;
+        p=json_ws(key_end);if(*p++!=':')return 0;p=json_ws(p);
+        const char *end=json_value_end(p);if(!end)return 0;
+        size_t key_len=(size_t)(key_end-key-2);
+        if(strlen(name)==key_len&&!memcmp(key+1,name,key_len)){
+            *value=p;*length=(size_t)(end-p);return 1;
+        }
+        p=json_ws(end);if(*p==','){p++;continue;}if(*p=='}')return 0;return 0;
+    }
+}
+static int youtube_id(const char *raw,size_t n,char out[12]){
+    if(n!=13||raw[0]!='"'||raw[12]!='"')return 0;
+    for(int i=0;i<11;i++){
+        unsigned char ch=(unsigned char)raw[i+1];
+        if(!isalnum(ch)&&ch!='_'&&ch!='-')return 0;
+        out[i]=(char)ch;
+    }out[11]=0;return 1;
+}
+static void youtube_search_response(Conn c,const char *query,const struct Proxy *proxy){
+    size_t query_len=strlen(query);
+    if(!query_len||query_len>700){message(c,400,"Bad Request","Enter a track title to search YouTube.");return;}
+    for(const unsigned char *p=(const unsigned char *)query;*p;p++){
+        if(*p<32||*p==127){message(c,400,"Bad Request","The YouTube search text contains invalid characters.");return;}
+    }
+    char *raw=malloc(1024*1024+1);char *safe=malloc(128*1024);
+    if(!raw||!safe){free(raw);free(safe);message(c,507,"Temp File Error","Not enough memory to prepare the YouTube search.");return;}
+    size_t raw_len=0;int result=ytdlp_search(query,proxy,raw,1024*1024+1,&raw_len);
+    if(result){
+        free(raw);free(safe);
+        if(result==1)message(c,503,"yt-dlp Required","yt-dlp was not found on PATH. Install yt-dlp to search or download YouTube matches.");
+        else if(result==3)message(c,502,"Search Too Large","The YouTube search response exceeded its size limit.");
+        else if(result==4)message(c,507,"Temp File Error","A temporary file could not be created or read.");
+        else if(proxy&&proxy->url)message(c,502,"Proxy Search Failed","YouTube search failed through the configured proxy. No direct fallback was attempted.");
+        else message(c,502,"YouTube Search Failed","YouTube search failed. Check yt-dlp and the network connection, then retry.");
+        return;
+    }
+    size_t used=0;const char *line=raw,*limit=raw+raw_len;
+    while(line<limit){
+        const char *end=memchr(line,'\n',(size_t)(limit-line));if(!end)end=limit;
+        size_t line_len=(size_t)(end-line);
+        if(line_len&&line[line_len-1]=='\r')line_len--;
+        char *row=(char *)line;char saved=row[line_len];row[line_len]=0;
+        char id[12];const char *idv,*title,*channel,*duration;size_t idn,titlen,channeln,durationn;
+        channel=NULL;
+        if(line_len&&json_field(line,"id",&idv,&idn)&&youtube_id(idv,idn,id)&&
+           json_field(line,"title",&title,&titlen)){
+            if(!json_field(line,"channel",&channel,&channeln))
+                json_field(line,"uploader",&channel,&channeln);
+            if(!channel){channel="\"Unknown channel\"";channeln=strlen(channel);}
+            if(!json_field(line,"duration",&duration,&durationn)){duration="null";durationn=4;}
+            int n=format_text(safe+used,128*1024-used,
+                "{\"id\":\"%s\",\"title\":%.*s,\"channel\":%.*s,\"duration\":%.*s}\n",
+                id,(int)titlen,title,(int)channeln,channel,(int)durationn,duration);
+            if(n<=0||n>=(int)(128*1024-used)){used=0;break;}used+=(size_t)n;
+        }
+        row[line_len]=saved;
+        line=end<limit?end+1:limit;
+    }
+    free(raw);
+    if(!used){free(safe);message(c,200,"OK","");return;}
+    if(headers(c,200,"OK","application/x-ndjson; charset=utf-8",(int)used,NULL))send_all(c,safe,(int)used);
+    free(safe);
+}
+static void youtube_audio_response(Conn c,const char *watch_url,const struct Proxy *proxy){
+    char *stream=malloc(URL_CAP+1);if(!stream){message(c,507,"Temp File Error","Not enough memory to resolve the YouTube audio.");return;}
+    size_t length=0;int result=ytdlp_resolve(watch_url,proxy,stream,URL_CAP+1,&length);
+    if(result){
+        free(stream);
+        if(result==1)message(c,503,"yt-dlp Required","yt-dlp was not found on PATH. Install yt-dlp to search or download YouTube matches.");
+        else if(result==3)message(c,502,"Stream URL Too Large","The resolved audio URL exceeded its size limit.");
+        else if(result==4)message(c,507,"Temp File Error","A temporary file could not be created or read.");
+        else if(proxy&&proxy->url)message(c,502,"Proxy Resolution Failed","YouTube stream resolution failed through the configured proxy. No direct fallback was attempted.");
+        else message(c,502,"YouTube Resolution Failed","yt-dlp could not resolve this YouTube match. Choose another result or retry.");
+        return;
+    }
+    if(!valid_url(stream,0)){
+        free(stream);message(c,502,"Invalid Stream URL","yt-dlp did not return a valid HTTPS audio stream.");return;
+    }
+    file_response(c,stream,0,proxy);
+    free(stream);
+}
+
 static void serve(Conn c){
     char data[REQUEST_CAP+1],method[12],path[500],ver[12],host[80],actual_origin[100],action[8],length[32],te[64];
     int used=0;char *split=NULL;
@@ -210,21 +332,26 @@ static void serve(Conn c){
     if(!strcmp(path,"/api/quit")){message(c,200,"OK","Session ended.");ADD(&stopping,1);return;}
     const int catalog=!strcmp(path,"/api/catalog");
     const int test=!strcmp(path,"/api/proxy-test");
-    if(!catalog&&!test&&strcmp(path,"/api/audio")){message(c,404,"Not Found","Unknown action.");return;}
+    const int youtube_search=!strcmp(path,"/api/youtube-search");
+    if(!catalog&&!test&&!youtube_search&&strcmp(path,"/api/audio")){message(c,404,"Not Found","Unknown action.");return;}
     struct Proxy proxy;char proxyUrl[512],proxyUser[128],proxyPass[128];
     if(!parse_proxy(lines,&proxy,proxyUrl,sizeof(proxyUrl),proxyUser,sizeof(proxyUser),proxyPass,sizeof(proxyPass))){
         message(c,400,"Bad Request","Invalid proxy setting.");return;}
+    if(youtube_search){youtube_search_response(c,url,&proxy);return;}
     if(test){
         if(!proxy.url){message(c,400,"Bad Request","Enable the proxy first.");return;}
         if(!valid_url(url,0)){message(c,400,"Bad Request","Enter a valid HTTPS test URL.");return;}
         proxy_test_response(c,url,&proxy);
         return;
     }
+    if(!catalog&&youtube_video_url(url)){youtube_audio_response(c,url,&proxy);return;}
     if(!valid_url(url,catalog)){message(c,400,"Bad Request","Enter a valid direct HTTPS download URL, or use the Track link tab.");return;}
     file_response(c,url,catalog,&proxy);
 }
 static void handle(Conn c){serve(c);ADD(&workers,-1);}
 int main(int argc,char **argv){
+    /* Keep a searchable feature contract in the native executable. */
+    if(trackport_feature_markers[0]!='X')return 2;
     int browser=1;
     if(argc==2&&!strcmp(argv[1],"--no-browser"))browser=0;
     else if(argc>1){puts("Usage: Trackport [--no-browser]");return 2;}

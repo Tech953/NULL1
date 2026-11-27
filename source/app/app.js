@@ -5,6 +5,7 @@
   let reference = null,
     pickerRef = null,
     lookupTask = null,
+    youtubeTask = null,
     controller = null,
     active = false,
     zipping = false,
@@ -74,10 +75,18 @@
   });
 
   function setReference(r) {
+    if (youtubeTask) {
+      youtubeTask.abort();
+      youtubeTask = null;
+    }
     reference = r;
     el("reference").hidden = !r;
     el("attach-form").hidden = true;
     el("paired-url").value = "";
+    el("youtube-sources").hidden = !r?.title;
+    el("youtube-results").textContent = "";
+    msg("youtube-msg", "");
+    el("youtube-search").disabled = false;
     if (!r) return;
     el("ref-provider").textContent = r.provider;
     el("ref-title").textContent = r.title || "Song reference";
@@ -113,6 +122,61 @@
         lookupTask = null;
         el("lookup").textContent = "Look up track";
         el("lookup").disabled = false;
+      }
+    }
+  };
+
+  function renderYouTubeResults(matches, track) {
+    const list = el("youtube-results");
+    list.textContent = "";
+    if (!matches.length) {
+      msg("youtube-msg", "No matches found. Try another catalog link or search again.");
+      return;
+    }
+    msg("youtube-msg", "Choose a match to add it to the queue. Nothing is selected automatically.");
+    for (const match of matches) {
+      const row = element("li", "alt-result"),
+        details = element("div"),
+        title = element("div", "alt-result-title", match.title),
+        metaParts = [match.channel];
+      if (match.duration) metaParts.push(duration(match.duration));
+      if (track.duration && match.duration) {
+        const difference = Math.abs(Math.round(track.duration - match.duration));
+        if (difference > 5) metaParts.push("length differs by " + duration(difference));
+      }
+      const meta = element("span", "alt-result-meta", metaParts.join(" · "));
+      details.append(title, meta);
+      const choose = button("Add to queue", "secondary", () => {
+        if (!reference || reference !== track) return;
+        add({
+          url: "https://www.youtube.com/watch?v=" + match.id,
+          ref: track,
+          youtubeMatch: match
+        });
+        refresh();
+        msg("youtube-msg", "Added “" + match.title + "” to the queue.");
+      });
+      row.append(details, choose);
+      list.append(row);
+    }
+  }
+  el("youtube-search").onclick = async () => {
+    if (!reference?.title) return;
+    if (youtubeTask) youtubeTask.abort();
+    const task = new AbortController();
+    youtubeTask = task;
+    el("youtube-search").disabled = true;
+    el("youtube-results").textContent = "";
+    msg("youtube-msg", "Searching YouTube through Trackport’s server…");
+    try {
+      const matches = await YouTube.search(reference, task.signal);
+      if (youtubeTask === task && reference) renderYouTubeResults(matches, reference);
+    } catch (err) {
+      if (youtubeTask === task && !task.signal.aborted) msg("youtube-msg", err.message);
+    } finally {
+      if (youtubeTask === task) {
+        youtubeTask = null;
+        el("youtube-search").disabled = false;
       }
     }
   };
@@ -184,7 +248,8 @@
   }
   el("url-form").onsubmit = e => urlForm(e, "direct-url", null);
   el("attach-form").onsubmit = e => urlForm(e, "paired-url", reference);
-  const desc = j => j.ref ? j.ref.provider + " reference" : j.file ? "Local file" : "Direct download";
+  const desc = j => j.youtubeMatch ? "YouTube source" :
+    j.ref ? j.ref.provider + " reference" : j.file ? "Local file" : "Direct download";
 
   function remove(j) {
     if (j.objectURL) URL.revokeObjectURL(j.objectURL);

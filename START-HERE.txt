@@ -26,6 +26,11 @@ Which files work?
 • Apple Music and Spotify subscription offline downloads are tied to their
   players. A song link supplies catalog information. Trackport needs the full
   audio separately. Use the specific song link when starting from an album.
+• You can search YouTube for alternatives to a catalog track. Trackport's local
+  server uses yt-dlp for search and stream resolution; it never rips Apple Music
+  or Spotify. YouTube terms prohibit downloading; this feature exists at the
+  user's direction for their own use. Use it only for content you have the right
+  to download.
 • A verified MPEG Layer III input is copied byte-for-byte, including its tags
   and artwork. The bitrate selector applies only to new encodes.
 • New encodes use 44.1 kHz mono or stereo and 128, 192, 256 or 320 kbps MP3.
@@ -47,7 +52,9 @@ Designed for current Windows 10/11 x64 and a current browser. The executable
 includes the interface and both audio-codec components. Local file conversion
 works offline. Online lookups and direct HTTPS downloads use the Windows system
 copy of curl.exe. No sign-in, API key, Node.js, Python or FFmpeg installation is
-required to use the executable.
+required for local files, catalog lookups or direct downloads. YouTube
+alternatives require yt-dlp.exe on PATH; Trackport reports an explicit error if
+it is missing.
 
 Imports are limited to 256 MiB per file. Audio is decoded in memory and one track
 renders at a time. Save smaller batches for long recordings or tight memory.
@@ -67,8 +74,9 @@ Settings has a Proxy section (under Output settings): an Enable toggle (off by
 default), a Proxy URL field (http://, https://, socks5://, or socks5h://, with
 optional username and password), and a Test proxy button that fetches a small
 test URL through the proxy and reports success and latency. When the proxy is
-on, all network traffic — catalog lookups, audio downloads, and the proxy test
-— goes through it. When it is off, the app behaves exactly as before. Bad
+on, all network traffic — catalog lookups, YouTube search and stream resolution,
+audio downloads, and the proxy test — goes through it. When it is off, the app
+behaves exactly as before. Bad
 proxy settings fail closed (the request is refused instead of fetching
 directly). The proxy settings are saved in the browser's local storage.
 

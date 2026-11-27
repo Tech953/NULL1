@@ -14,6 +14,7 @@ MP3 export for Windows x64. Convert DRM-free audio to MP3 (up to 320 kbps), or c
 
 - Downloaded, DRM-free iTunes Store purchases, recordings you made, and downloadable full audio from an artist or store can be converted. For a purchase on Windows, download it in Apple's Music app, locate the M4A on disk and add it to Trackport. Apple's instructions for redownloading purchases are at https://support.apple.com/en-us/120553.
 - Apple Music and Spotify subscription offline downloads are tied to their players. A song link supplies catalog information only. Trackport needs the full audio separately — attach a DRM-free file or a direct download URL. Use the specific song link when starting from an album.
+- Trackport can search YouTube for alternatives to a catalog track. The server uses `yt-dlp` for search and stream resolution; it is never used to rip Apple Music or Spotify. YouTube terms prohibit downloading; this feature exists at the user's direction for their own use. Use it only for content you have the right to download.
 - A verified MPEG Layer III input is copied byte-for-byte, including its tags and artwork. The bitrate selector applies only to new encodes.
 - New encodes use 44.1 kHz mono or stereo and 128, 192, 256 or 320 kbps MP3. Choose an original lossless file when available. A higher output bitrate cannot recover detail removed by an earlier encode.
 - WAV, FLAC, Ogg/Opus and DRM-free AAC-LC M4A were exercised in testing. The bundled AAC-LC decoder can read common iTunes-style files even if the browser lacks an AAC decoder. Other input codecs depend on the browser.
@@ -22,7 +23,7 @@ MP3 export for Windows x64. Convert DRM-free audio to MP3 (up to 320 kbps), or c
 
 ## Operating details
 
-Designed for current Windows 10/11 x64 and a current browser. The executable includes the interface and both audio-codec components. Local file conversion works offline. Online lookups and direct HTTPS downloads use the Windows system copy of curl.exe. No sign-in, API key, Node.js, Python or FFmpeg installation is required to use the executable.
+Designed for current Windows 10/11 x64 and a current browser. The executable includes the interface and both audio-codec components. Local file conversion works offline. Online lookups and direct HTTPS downloads use the Windows system copy of curl.exe. No sign-in, API key, Node.js, Python or FFmpeg installation is required for local files, catalog lookups or direct downloads. YouTube alternatives require `yt-dlp.exe` on PATH; if it is missing, Trackport reports that directly.
 
 Imports are limited to 256 MiB per file. Audio is decoded in memory and one track renders at a time. Save smaller batches for long recordings or tight memory. Completed files stay in this tab until you save, remove or close them. ZIP export uses the standard non-ZIP64 format and supports batches under 4 GiB. For a phone using MTP rather than a drive letter, save to your PC, then copy with Explorer.
 
@@ -30,7 +31,7 @@ The server binds to an available loopback port on this computer. The app contact
 
 ## Proxy
 
-Settings has a Proxy section (under Output settings): an Enable toggle (off by default), a Proxy URL field (`http://`, `https://`, `socks5://`, or `socks5h://`, with optional Username and Password), and a Test proxy button that fetches a small test URL through the proxy and reports success and latency. When the proxy is on, all network traffic — catalog lookups, audio downloads, and the proxy test — goes through it. When it is off, the app behaves exactly as before. Bad proxy settings fail closed (the request is refused instead of fetching directly). The proxy settings are saved in the browser's local storage.
+Settings has a Proxy section (under Output settings): an Enable toggle (off by default), a Proxy URL field (`http://`, `https://`, `socks5://`, or `socks5h://`, with optional Username and Password), and a Test proxy button that fetches a small test URL through the proxy and reports success and latency. When the proxy is on, all network traffic — catalog lookups, YouTube search and stream resolution, audio downloads, and the proxy test — goes through it. When it is off, the app behaves exactly as before. Bad proxy settings fail closed (the request is refused instead of fetching directly). The proxy settings are saved in the browser's local storage.
 
 ## Contents
 
@@ -47,10 +48,10 @@ Trackport embeds its interface and audio workers as compressed static resources 
 **Windows x64** — Python 3.8+ and a 64-bit MinGW-w64 GCC toolchain. From the `source` directory:
 
 ```sh
-python build.py --windows --cc x86_64-w64-mingw32-gcc
+python build.py --windows --cc x86_64-w64-mingw32-gcc --package
 ```
 
-Output is `build/Trackport.exe`.
+Outputs are `build/Trackport.exe` and `Trackport-Windows-x64.zip` in the project root. The ZIP contains the executable, `README.txt`, `START-HERE.txt`, and editable `source/` tree. YouTube alternatives require `yt-dlp.exe` on PATH.
 
 **Linux** — a C11 compiler, Python 3.8+, curl, and a browser:
 

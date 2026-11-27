@@ -505,6 +505,62 @@ a {
   margin-top: 7px
 }
 
+.alt-sources {
+  margin-top: 16px;
+  padding-top: 13px;
+  border-top: 1px solid #cdd7c5
+}
+
+.alt-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px
+}
+
+.alt-head h3 {
+  margin: 0;
+  font-size: 1rem
+}
+
+.alt-sources .hint {
+  font-size: .8rem
+}
+
+.alt-results {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none
+}
+
+.alt-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border: 1px solid #cdd7c5;
+  border-radius: 5px;
+  background: #fff
+}
+
+.alt-result-title {
+  font-weight: 650
+}
+
+.alt-result-meta {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: .8rem
+}
+
+.alt-result .secondary {
+  flex: 0 0 auto
+}
+
 .text-btn {
   background: transparent;
   color: var(--green);

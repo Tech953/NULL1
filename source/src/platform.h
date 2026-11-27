@@ -39,4 +39,12 @@ struct Proxy { const char *url, *user, *pass; };
    bytes are curl's HTTP status trailer and are excluded from served audio. */
 int fetch_file(Conn client, const char *url, int limit, int catalog,
                const struct Proxy *proxy, FILE **out, int *length, int *http);
+/* yt-dlp is an optional PATH dependency used only for YouTube alternatives.
+   Results are captured in caller-provided buffers and never served as stream
+   URLs to the browser. Return 0 on success, 1 if missing, 2 on tool/network
+   failure, 3 on output overflow, or 4 on temporary-file failure. */
+int ytdlp_search(const char *query, const struct Proxy *proxy,
+                 char *output, size_t capacity, size_t *length);
+int ytdlp_resolve(const char *watch_url, const struct Proxy *proxy,
+                  char *output, size_t capacity, size_t *length);
 #endif

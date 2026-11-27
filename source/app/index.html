@@ -12,6 +12,7 @@
   <script src="proxy.js" defer></script>
   <script src="transfer.js" defer></script>
   <script src="catalog.js" defer></script>
+  <script src="youtube.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 
@@ -70,6 +71,15 @@
             <a id="apple-purchase-help" class="purchase-link" target="_blank" rel="noreferrer" href="https://support.apple.com/en-us/120553" hidden>Download an iTunes purchase ↗</a>
             <p id="ref-note" class="hint"></p><button id="attach-file" class="secondary">Attach audio
               file</button> <button id="attach-url" class="text-btn">Use a download URL</button>
+            <section id="youtube-sources" class="alt-sources" hidden aria-labelledby="youtube-title">
+              <div class="alt-head"><h3 id="youtube-title">YouTube alternatives</h3><button
+                id="youtube-search" class="secondary" type="button">Search YouTube</button></div>
+              <p class="hint">Search is handled by Trackport’s server. Review every result and choose
+                one yourself. YouTube terms prohibit downloading; use this only for content you have
+                the right to use.</p>
+              <p id="youtube-msg" class="feedback" role="status" hidden></p>
+              <ul id="youtube-results" class="alt-results"></ul>
+            </section>
             <form id="attach-form" hidden><label for="paired-url">Full audio URL for this
                 track</label><input id="paired-url" type="text" inputmode="url" placeholder="https://…"
                 autocomplete="off"><button class="secondary">Add paired track</button></form>
@@ -113,7 +123,7 @@
             id="proxy-pass" type="password" autocomplete="off">
           <button id="proxy-test" class="secondary" type="button">Test proxy</button>
           <p id="proxy-msg" role="status" class="feedback" hidden></p>
-          <p class="hint">When enabled, catalog lookups and downloads go through this proxy.
+          <p class="hint">When enabled, catalog lookups, YouTube searches and audio downloads go through this proxy.
             When off, Trackport connects directly.</p>
           </form>
         </section>
@@ -149,8 +159,8 @@
       device.</p>
     <h3>Use a music-service link</h3>
     <p>Paste a shared song link or Spotify track URI. Apple Music and Spotify supply track details.
-      Attach your copy of the recording, such as a downloaded iTunes Store purchase or an artist-provided
-      file. Subscription offline downloads play inside their respective apps.</p>
+      You can also search for a YouTube alternative and choose a result yourself. Apple Music and Spotify
+      streams remain metadata-only; subscription offline downloads play inside their respective apps.</p>
     <h3>Formats and storage</h3>
     <p>New encodes use mono or stereo at 44.1 kHz. Existing MP3s copy exactly. Format decoding depends on
       your browser. Full audio stays on this computer. Download URLs go to their hosts, and catalog

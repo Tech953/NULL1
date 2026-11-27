@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <ctype.h>
 #ifdef _WIN32
 #include <io.h>
 #include <fcntl.h>
@@ -103,6 +105,170 @@ static int proxy_ok(const struct Proxy *p) {
     for (const char *s = p->pass; s && *s; s++)
         if ((unsigned char)*s < 33 || (unsigned char)*s >= 127 || *s == '"' || *s == '\\') return 0;
     return 1;
+}
+static FILE *stage(void);
+static int stage_too_big(FILE *f,int limit);
+static int poll_child(Child child,int *exit_code);
+static void abort_child(Child child);
+static void release_child(Child child);
+
+/* yt-dlp accepts proxy authentication in the proxy URL. Encode credentials
+   as URI userinfo so punctuation cannot alter the proxy authority. */
+static int proxy_for_ytdlp(const struct Proxy *p,char *out,size_t cap) {
+    static const char hex[]="0123456789ABCDEF";
+    size_t used=0;
+    if(!p||!p->url||!*p->url){if(cap)out[0]=0;return 1;}
+    if(!proxy_ok(p))return 0;
+    const char *scheme=strstr(p->url,"://");
+    if(!scheme)return 0;
+    size_t prefix=(size_t)(scheme-p->url)+3;
+    const char *authority=p->url+prefix;
+    size_t authority_len=strlen(authority);
+    if(authority_len&&authority[authority_len-1]=='/')authority_len--;
+    if(prefix+authority_len+1>=cap)return 0;
+    memcpy(out,p->url,prefix);used=prefix;
+    if(p->user&&*p->user){
+        const char *parts[2]={p->user,p->pass?p->pass:""};
+        for(int part=0;part<2;part++){
+            if(part==1){if(used+1>=cap)return 0;out[used++]=':';}
+            for(const unsigned char *s=(const unsigned char *)parts[part];*s;s++){
+                unsigned char c=*s;
+                if(isalnum(c)||c=='-'||c=='.'||c=='_'||c=='~'){
+                    if(used+1>=cap)return 0;
+                    out[used++]=(char)c;
+                }else{
+                    if(used+3>=cap)return 0;
+                    out[used++]='%';out[used++]=hex[c>>4];out[used++]=hex[c&15];
+                }
+            }
+        }
+        if(used+1>=cap)return 0;
+        out[used++]='@';
+    }
+    if(used+authority_len>=cap)return 0;
+    memcpy(out+used,authority,authority_len);used+=authority_len;out[used]=0;
+    return 1;
+}
+
+#define YTDLP_OUTPUT_LIMIT (1024*1024)
+#ifdef _WIN32
+static int begin_ytdlp(FILE *f,char **args,const struct Proxy *proxy,Child *child,int *missing) {
+    wchar_t cmd[18000];char line[16000];size_t used=0;
+    char proxy_url[2048];
+    if(!proxy_for_ytdlp(proxy,proxy_url,sizeof(proxy_url)))return 0;
+    (void)proxy_url;
+    /* The caller supplies a complete, already ordered argv vector. Quote each
+       argument using the Windows command-line backslash rules; no shell runs. */
+    for(int i=0;args[i];i++){
+        const char *s=args[i];size_t n=strlen(s),slashes=0;
+        if(used+2>=sizeof(line))return 0;
+        line[used++]='"';
+        for(size_t j=0;j<n;j++){
+            if(s[j]=='\\'){slashes++;continue;}
+            if(s[j]=='"'){
+                while(slashes--){if(used+1>=sizeof(line))return 0;line[used++]='\\';}
+                slashes=0;if(used+2>=sizeof(line))return 0;line[used++]='\\';line[used++]='"';
+            }else{
+                while(slashes--){if(used+1>=sizeof(line))return 0;line[used++]='\\';}
+                slashes=0;if(used+1>=sizeof(line))return 0;line[used++]=s[j];
+            }
+        }
+        while(slashes--){if(used+2>=sizeof(line))return 0;line[used++]='\\';line[used++]='\\';}
+        if(used+2>=sizeof(line))return 0;line[used++]='"';line[used++]=' ';
+    }
+    if(!used||used+1>=sizeof(line))return 0;
+    line[used]=0;
+    if(!MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,line,-1,cmd,18000))return 0;
+    HANDLE self=GetCurrentProcess(),output=INVALID_HANDLE_VALUE;
+    if(!DuplicateHandle(self,(HANDLE)_get_osfhandle(_fileno(f)),self,&output,0,TRUE,DUPLICATE_SAME_ACCESS))return 0;
+    SECURITY_ATTRIBUTES sa={sizeof(sa),NULL,TRUE};
+    HANDLE nullDevice=CreateFileW(L"NUL",GENERIC_READ|GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,&sa,OPEN_EXISTING,0,NULL);
+    if(nullDevice==INVALID_HANDLE_VALUE){CloseHandle(output);return 0;}
+    STARTUPINFOW si;PROCESS_INFORMATION pi;memset(&si,0,sizeof(si));memset(&pi,0,sizeof(pi));
+    si.cb=sizeof(si);si.dwFlags=STARTF_USESTDHANDLES;si.hStdInput=nullDevice;si.hStdError=nullDevice;si.hStdOutput=output;
+    BOOL ok=CreateProcessW(NULL,cmd,NULL,NULL,TRUE,CREATE_NO_WINDOW,NULL,NULL,&si,&pi);
+    DWORD error=ok?0:GetLastError();
+    CloseHandle(nullDevice);CloseHandle(output);
+    if(!ok){if(error==ERROR_FILE_NOT_FOUND||error==ERROR_PATH_NOT_FOUND)*missing=1;return 0;}
+    CloseHandle(pi.hThread);*child=pi.hProcess;return 1;
+}
+static int poll_ytdlp(Child child,int *exit_code){return poll_child(child,exit_code);}
+#else
+static int begin_ytdlp(FILE *f,char **args,const struct Proxy *proxy,Child *child,int *missing) {
+    char proxy_url[2048];
+    if(!proxy_for_ytdlp(proxy,proxy_url,sizeof(proxy_url)))return 0;
+    (void)proxy_url;
+    posix_spawn_file_actions_t a;if(posix_spawn_file_actions_init(&a))return 0;
+    int bad=posix_spawn_file_actions_adddup2(&a,fileno(f),STDOUT_FILENO)||
+            posix_spawn_file_actions_addopen(&a,STDIN_FILENO,"/dev/null",O_RDONLY,0)||
+            posix_spawn_file_actions_addopen(&a,STDERR_FILENO,"/dev/null",O_WRONLY,0);
+    int error=bad?EINVAL:posix_spawnp(child,"yt-dlp",&a,NULL,args,environ);
+    posix_spawn_file_actions_destroy(&a);
+    if(error==ENOENT)*missing=1;
+    return !error;
+}
+static int poll_ytdlp(Child child,int *exit_code){return poll_child(child,exit_code);}
+#endif
+
+static int run_ytdlp(char **args,const struct Proxy *proxy,char *output,size_t capacity,size_t *length,int allow_empty) {
+    FILE *f=stage();if(!f)return 4;
+    Child child;int missing=0;
+    if(!begin_ytdlp(f,args,proxy,&child,&missing)){fclose(f);return missing?1:2;}
+    int code=1,reason=0,ticks=0;
+    while(!poll_ytdlp(child,&code)){
+        if(stage_too_big(f,YTDLP_OUTPUT_LIMIT)){reason=3;abort_child(child);break;}
+        if(++ticks>=600){reason=2;abort_child(child);break;}
+    }
+    release_child(child);
+    if(!reason&&stage_too_big(f,YTDLP_OUTPUT_LIMIT))reason=3;
+    if(!reason&&code)reason=2;
+    if(!reason){
+        if(fseek(f,0,SEEK_END)){reason=4;}
+        else{
+            long size=ftell(f);
+            if(size<0||size>YTDLP_OUTPUT_LIMIT)reason=3;
+            else if(!allow_empty&&size==0)reason=2;
+            else if((size_t)size>=capacity)reason=3;
+            else if(fseek(f,0,SEEK_SET))reason=4;
+            else if(size&&fread(output,1,(size_t)size,f)!=(size_t)size)reason=4;
+            else{output[size]=0;*length=(size_t)size;}
+        }
+    }
+    fclose(f);return reason;
+}
+
+int ytdlp_search(const char *query,const struct Proxy *proxy,char *output,size_t capacity,size_t *length) {
+    char search[1024],proxy_url[2048];
+    if(!query||strlen(query)>700||!proxy_for_ytdlp(proxy,proxy_url,sizeof(proxy_url)))return 2;
+    if(snprintf(search,sizeof(search),"ytsearch5:%s",query)>=(int)sizeof(search))return 2;
+    char *args[32];int i=0;
+    args[i++]="yt-dlp";args[i++]="--ignore-config";args[i++]="--no-warnings";args[i++]="--no-progress";
+    args[i++]="--flat-playlist";args[i++]="--dump-json";args[i++]="--skip-download";
+    args[i++]="--playlist-end";args[i++]="5";args[i++]="--socket-timeout";args[i++]="15";
+    args[i++]="--retries";args[i++]="1";args[i++]="--extractor-retries";args[i++]="1";
+    if(proxy&&proxy->url&&*proxy->url){args[i++]="--proxy";args[i++]=proxy_url;}
+    args[i++]="--";args[i++]=search;args[i]=NULL;
+    return run_ytdlp(args,proxy,output,capacity,length,1);
+}
+
+int ytdlp_resolve(const char *watch_url,const struct Proxy *proxy,char *output,size_t capacity,size_t *length) {
+    char proxy_url[2048];
+    if(!watch_url||strlen(watch_url)>512||!proxy_for_ytdlp(proxy,proxy_url,sizeof(proxy_url)))return 2;
+    char *args[32];int i=0;
+    args[i++]="yt-dlp";args[i++]="--ignore-config";args[i++]="--no-warnings";args[i++]="--no-progress";
+    args[i++]="--get-url";args[i++]="--format";args[i++]="bestaudio/best";args[i++]="--no-playlist";
+    args[i++]="--socket-timeout";args[i++]="15";args[i++]="--retries";args[i++]="1";
+    args[i++]="--extractor-retries";args[i++]="1";args[i++]="--extractor-args";
+    args[i++]="youtube:player_client=android";
+    if(proxy&&proxy->url&&*proxy->url){args[i++]="--proxy";args[i++]=proxy_url;}
+    args[i++]="--";args[i++]=(char *)watch_url;args[i]=NULL;
+    int result=run_ytdlp(args,proxy,output,capacity,length,0);
+    if(!result){
+        size_t n=0;while(n<*length&&output[n]!='\r'&&output[n]!='\n')n++;
+        output[n]=0;*length=n;
+        if(!n)return 2;
+    }
+    return result;
 }
 #ifdef _WIN32
 static FILE *stage(void) {
