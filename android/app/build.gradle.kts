@@ -25,14 +25,6 @@ android {
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
         }
-        python {
-            version = "3.11"
-            pip {
-                install("requests==2.34.2")
-                install("PySocks==1.7.1")
-                install("yt-dlp==2026.11.23")
-            }
-        }
     }
 
     sourceSets.getByName("main").assets.srcDir(generatedWebAssets)
@@ -43,6 +35,17 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+    }
+}
+
+chaquopy {
+    defaultConfig {
+        version = "3.11"
+        pip {
+            install("requests==2.34.2")
+            install("PySocks==1.7.1")
+            install("yt-dlp==2026.11.23")
+        }
     }
 }
 
