@@ -41,6 +41,7 @@ android {
 chaquopy {
     defaultConfig {
         version = "3.11"
+        buildPython("python3.11")
         pip {
             install("requests==2.34.2")
             install("PySocks==1.7.1")
