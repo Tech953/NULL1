@@ -1,0 +1,75 @@
+name: Trackport Android test APK
+
+on:
+  push:
+    paths:
+      - "android/**"
+      - "artifacts/trackport/native/app/**"
+      - "source/app/**"
+      - ".github/workflows/android-test-apk.yml"
+  pull_request:
+    paths:
+      - "android/**"
+      - "artifacts/trackport/native/app/**"
+      - "source/app/**"
+      - ".github/workflows/android-test-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-apk:
+    name: Build local-first test APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Set up Android SDK and NDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: >-
+            platform-tools
+            platforms;android-35
+            build-tools;35.0.0
+            ndk;27.2.12479018
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Check Android service syntax and policy
+        run: |
+          python3 -m py_compile android/app/src/main/python/trackport_server.py
+          python3 -m unittest discover -s android/tests -v
+
+      - name: Assemble debug APK
+        run: gradle --no-daemon --project-dir android :app:assembleDebug
+
+      - name: Verify APK archive
+        run: |
+          apk="android/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$apk"
+          unzip -t "$apk"
+
+      - name: Upload test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Trackport-Android-test-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14

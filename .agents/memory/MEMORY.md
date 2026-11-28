@@ -1,0 +1,1 @@
+- [Trackport stays local-first](trackport-local-first.md) — preserve its native loopback server and Windows build; keep audio processing on the user's device.

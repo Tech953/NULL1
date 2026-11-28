@@ -1,0 +1,30 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "dC7v1g-nIJPipy0HvXLEy"
+uri = "file://generated-artifacts/trackport-android/app-debug.apk"
+type = "unspecified"
+title = "Trackport Android test APK"
+description = "Debug APK from GitHub Actions; archive CRC passed. Proxy support is included and off by default."
+logical_id = "c360f870-680b-4af8-9e57-adcf88145e7b"
+content_hash = "sha256:e5e3581ca767f740249c948c29e7791a8c6370c1c892f518bc84943d570d345d"
+size = 46045746
+mtime_ms = 1795878240323
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:9bdc69bc-63f9-4d0d-acb3-04e607270574/c360f870-680b-4af8-9e57-adcf88145e7b/a66503d1-1bcf-4e4a-96da-5bd485a1e385"
+storage_version_token = "1795878282496542"
+content_type = "application/octet-stream"
+
+[[outputs]]
+id = "GfZXpKK7lhRFEWQ_CkVCb"
+uri = "file://generated-artifacts/trackport-android-startupfix/app-debug.apk"
+type = "unspecified"
+title = "Trackport Android test APK — startup fix"
+description = "Rebuilt from commit 22ece888. Startup asset-copy fix included; APK CRC check passed. Proxy support is included and off by default."
+logical_id = "f5ef7eb6-9816-4ce7-90d6-156b99983866"
+content_hash = "sha256:f2d82c1fcf13392c11404235c00932fd15b202fbf1f015666bb96445dc8f9ec2"
+size = 46045214
+mtime_ms = 1795878864783
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:9bdc69bc-63f9-4d0d-acb3-04e607270574/f5ef7eb6-9816-4ce7-90d6-156b99983866/18ab9917-1f31-47b0-bba7-84d34b71e00f"
+storage_version_token = "1795878873338306"
+content_type = "application/octet-stream"

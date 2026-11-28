@@ -1,0 +1,27 @@
+Trackport includes the following separate, replaceable JavaScript libraries.
+Rebuild the application from the supplied source to substitute a compatible
+library. The credits and licenses below apply to those third-party components.
+
+lamejs 1.2.1, Alex Zhukov and the LAME authors
+  https://github.com/zhuker/lamejs/tree/582bbba6a12f981b984d8fb9e1874499fed85675
+  https://lame.sourceforge.net/
+  The supplied lame.all.js is the unmodified upstream distribution.
+  Its package manifest identifies LGPL-3.0. Individual notices in the
+  source also identify earlier LGPL licenses. See LAME-notice.txt and
+  the accompanying LGPL texts.
+
+AAC.js 0.1.3, Devon Govett, Official.fm Labs and contributors
+  https://github.com/audiocogs/aac.js/tree/2d9bd01b14fb70022340560b66b577624584b878
+  The source of each module is included in aac-decoder.js, wrapped with a
+  local CommonJS module loader. AAC.js identifies LGPL 3 or later. See
+  COPYING.LGPL-3 and COPYING.GPL-3 and the notices in the source.
+
+Aurora.js 0.4.2, Audiocogs
+  https://github.com/audiocogs/aurora.js
+  Distribution: https://cdnjs.com/libraries/aurora.js/0.4.2
+  Aurora.js is released under the MIT license, reproduced in MIT-Aurora.txt.
+
+The packaged Windows launcher was compiled with TinyCC.
+  https://github.com/TinyCC/tinycc/tree/5cef7f3f85b0fbbd4663fd3518ba097d7fe3d738
+  TinyCC's runtime library includes its standard executable-linking exception
+  in lib/libtcc1.c. The compiler itself is not part of this package.

@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Trackport"
+description = "Trackport is a local-first music practice and tracking app. Its browser interface works with the native loopback server on the user's device, keeping audio and processing local."
+version = "1.0.0"
+id = "artifacts/trackport"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24090
+
+[services.development]
+run = "pnpm --filter @workspace/trackport run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/trackport", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/trackport/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24090"
+BASE_PATH = "/"
