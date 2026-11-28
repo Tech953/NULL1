@@ -61,3 +61,7 @@ Thumbs.db
 /generated-artifacts/
 __pycache__/
 *.py[cod]
+
+# User-provided diagnostic screenshot stays local.
+/.migration-backup/attached_assets/E1_1795699751517.png
+/artifacts/trackport/public/attached_assets/E1_1795699751517.png
