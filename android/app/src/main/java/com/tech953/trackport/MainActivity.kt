@@ -20,6 +20,7 @@ import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.util.concurrent.Executors
 
 class MainActivity : Activity() {
@@ -160,6 +161,9 @@ class MainActivity : Activity() {
         background.execute {
             try {
                 val webRoot = File(filesDir, "trackport-www")
+                if (webRoot.exists() && !webRoot.deleteRecursively()) {
+                    throw IOException("Could not clear Trackport's previous web assets.")
+                }
                 copyAssetFolder("www", webRoot)
                 if (!Python.isStarted()) {
                     Python.start(AndroidPlatform(applicationContext))
@@ -188,16 +192,38 @@ class MainActivity : Activity() {
     }
 
     private fun copyAssetFolder(assetPath: String, target: File) {
-        target.mkdirs()
-        val children = assets.list(assetPath).orEmpty()
-        if (children.isNotEmpty()) {
-            children.forEach { child ->
-                copyAssetFolder("$assetPath/$child", File(target, child))
+        val assetFile = try {
+            assets.open(assetPath)
+        } catch (_: IOException) {
+            null
+        }
+
+        if (assetFile != null) {
+            assetFile.use { input ->
+                if (target.isDirectory && !target.deleteRecursively()) {
+                    throw IOException("Could not replace a stale Trackport web asset.")
+                }
+                val parent = target.parentFile
+                if (parent != null && !parent.exists() && !parent.mkdirs()) {
+                    throw IOException("Could not create Trackport's web asset directory.")
+                }
+                FileOutputStream(target).use { output -> input.copyTo(output) }
             }
             return
         }
-        assets.open(assetPath).use { input ->
-            FileOutputStream(target).use { output -> input.copyTo(output) }
+
+        val children = assets.list(assetPath).orEmpty()
+        if (children.isEmpty()) {
+            throw IOException("Packaged Trackport asset could not be opened: $assetPath")
+        }
+        if (target.exists() && !target.isDirectory && !target.delete()) {
+            throw IOException("Could not replace a stale Trackport web asset.")
+        }
+        if (!target.exists() && !target.mkdirs()) {
+            throw IOException("Could not create Trackport's web asset directory.")
+        }
+        children.forEach { child ->
+            copyAssetFolder("$assetPath/$child", File(target, child))
         }
     }
 
